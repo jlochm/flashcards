@@ -125,7 +125,7 @@ def correct_indices(row: pd.Series) -> list[int]:
     return [i for i, col in enumerate(CORRECT_COLS) if int(row[col]) == 1]
 
 
-def correct_letters_from_indices(indices: list[int]) -> list[str]:
+def letters_from_indices(indices: list[int]) -> list[str]:
     return [OPTION_KEYS[i] for i in indices]
 
 
@@ -160,35 +160,29 @@ def process_answer(progress: dict, current_bucket: int, qid: str, is_correct: bo
     return ("wrong", target_bucket)
 
 
-def initialize_session_state() -> None:
-    defaults = {
-        "active_bucket": 0,
-        "feedback_ready": False,
-        "last_result": None,
-        "current_question_id": None,
-    }
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
+def initialize_session_state(progress: dict) -> None:
+    if "active_bucket" not in st.session_state:
+        st.session_state.active_bucket = 0
+    if "mode" not in st.session_state:
+        st.session_state.mode = "question"  # question | feedback
+    if "current_question_id" not in st.session_state:
+        st.session_state.current_question_id = pick_current_question(progress, st.session_state.active_bucket)
+    if "last_result" not in st.session_state:
+        st.session_state.last_result = None
 
 
-def pick_current_question(progress: dict) -> str | None:
-    active_bucket = st.session_state.active_bucket
-    queue = progress[bucket_key(active_bucket)]
+def pick_current_question(progress: dict, bucket_idx: int) -> str | None:
+    queue = progress[bucket_key(bucket_idx)]
     if not queue:
         return None
     return queue[0]
 
 
-def set_next_question(progress: dict) -> None:
-    st.session_state.feedback_ready = False
-    st.session_state.last_result = None
-    st.session_state.current_question_id = pick_current_question(progress)
-
-
 def switch_bucket(bucket_idx: int, progress: dict) -> None:
     st.session_state.active_bucket = bucket_idx
-    set_next_question(progress)
+    st.session_state.mode = "question"
+    st.session_state.last_result = None
+    st.session_state.current_question_id = pick_current_question(progress, bucket_idx)
     st.rerun()
 
 
@@ -206,11 +200,13 @@ def reset_progress(df: pd.DataFrame) -> None:
     progress = build_default_progress(df["question_id"].tolist())
     save_progress(progress)
     st.session_state.active_bucket = 0
-    set_next_question(progress)
+    st.session_state.mode = "question"
+    st.session_state.last_result = None
+    st.session_state.current_question_id = pick_current_question(progress, 0)
     st.rerun()
 
 
-def render_question(row: pd.Series, q_type: str) -> None:
+def render_question_text(row: pd.Series, q_type: str) -> None:
     st.markdown("---")
     st.markdown(
         f"""
@@ -221,6 +217,18 @@ def render_question(row: pd.Series, q_type: str) -> None:
         unsafe_allow_html=True,
     )
     st.info(q_type)
+
+
+def clear_question_widget_state(qid: str) -> None:
+    for key in [
+        f"radio_{qid}",
+        f"check_{qid}_0",
+        f"check_{qid}_1",
+        f"check_{qid}_2",
+        f"check_{qid}_3",
+    ]:
+        if key in st.session_state:
+            del st.session_state[key]
 
 
 def main() -> None:
@@ -235,10 +243,7 @@ def main() -> None:
         st.stop()
 
     progress = load_or_create_progress(df)
-    initialize_session_state()
-
-    if st.session_state.current_question_id is None:
-        st.session_state.current_question_id = pick_current_question(progress)
+    initialize_session_state(progress)
 
     with st.sidebar:
         st.header("Progress")
@@ -252,20 +257,17 @@ def main() -> None:
     render_bucket_buttons(progress)
 
     active_bucket = st.session_state.active_bucket
-    active_key = bucket_key(active_bucket)
-    active_queue = progress[active_key]
+    active_queue = progress[bucket_key(active_bucket)]
 
     st.markdown(f"### Current list: {BUCKET_LABELS[active_bucket]}")
 
-    if not active_queue:
+    if not active_queue and st.session_state.mode == "question":
         st.warning("This list is empty. Choose another list above.")
-        st.session_state.current_question_id = None
         st.stop()
 
     current_qid = st.session_state.current_question_id
-
     if current_qid is None:
-        current_qid = pick_current_question(progress)
+        current_qid = pick_current_question(progress, active_bucket)
         st.session_state.current_question_id = current_qid
 
     if current_qid is None:
@@ -277,77 +279,68 @@ def main() -> None:
     correct_idx = correct_indices(row)
     correct_set = set(correct_idx)
 
-    total_in_bucket = len(active_queue)
-    st.caption(f"Questions currently in this list: {total_in_bucket}")
+    st.caption(f"Questions currently in this list: {len(active_queue)}")
+    render_question_text(row, q_type)
 
-    render_question(row, q_type)
+    if st.session_state.mode == "question":
+        selected_indices = []
 
-    if not st.session_state.feedback_ready:
-        with st.form(key=f"question_form_{current_qid}"):
-            selected_indices = []
-
-            if q_type == "Single choice":
-                options = [f"{OPTION_KEYS[i]}: {row[ANSWER_COLS[i]]}" for i in range(4)]
-                choice = st.radio(
-                    "Choose one answer:",
-                    options=range(4),
-                    format_func=lambda i: options[i],
-                    index=None,
-                    key=f"radio_{current_qid}",
+        if q_type == "Single choice":
+            options = [f"{OPTION_KEYS[i]}: {row[ANSWER_COLS[i]]}" for i in range(4)]
+            choice = st.radio(
+                "Choose one answer:",
+                options=range(4),
+                format_func=lambda i: options[i],
+                index=None,
+                key=f"radio_{current_qid}",
+            )
+            if choice is not None:
+                selected_indices = [choice]
+        else:
+            st.write("Choose one or more answers:")
+            for i in range(4):
+                checked = st.checkbox(
+                    f"{OPTION_KEYS[i]}: {row[ANSWER_COLS[i]]}",
+                    value=False,
+                    key=f"check_{current_qid}_{i}",
                 )
-                if choice is not None:
-                    selected_indices = [choice]
-            else:
-                st.write("Choose one or more answers:")
-                for i in range(4):
-                    checked = st.checkbox(
-                        f"{OPTION_KEYS[i]}: {row[ANSWER_COLS[i]]}",
-                        value=False,
-                        key=f"check_{current_qid}_{i}",
-                    )
-                    if checked:
-                        selected_indices.append(i)
+                if checked:
+                    selected_indices.append(i)
 
-            submitted = st.form_submit_button("Submit", use_container_width=True)
-
-        if submitted:
+        if st.button("Submit", type="primary", use_container_width=True, key=f"submit_{current_qid}"):
             selected_set = set(selected_indices)
             is_correct = selected_set == correct_set
-            result, target_bucket = process_answer(progress, active_bucket, current_qid, is_correct)
+            _, target_bucket = process_answer(progress, active_bucket, current_qid, is_correct)
 
-            st.session_state.feedback_ready = True
             st.session_state.last_result = {
                 "question_id": current_qid,
                 "selected_indices": selected_indices,
                 "is_correct": is_correct,
-                "result": result,
                 "moved_to_bucket": target_bucket,
                 "correct_indices": correct_idx,
-                "bucket_when_answered": active_bucket,
             }
+            st.session_state.mode = "feedback"
             st.rerun()
 
     else:
         result = st.session_state.last_result
 
         if not result or result["question_id"] != current_qid:
-            st.session_state.feedback_ready = False
+            st.session_state.mode = "question"
             st.session_state.last_result = None
             st.rerun()
 
         st.markdown("---")
 
         if result["is_correct"]:
-            st.success(
-                f"Correct. The question was moved to {BUCKET_LABELS[result['moved_to_bucket']]}."
-            )
+            st.success(f"Correct. The question was moved to {BUCKET_LABELS[result['moved_to_bucket']]}.")
         else:
             st.error(
                 f"Incorrect. The question was moved to {BUCKET_LABELS[result['moved_to_bucket']]} and will reappear soon."
             )
 
-        selected_letters = correct_letters_from_indices(result["selected_indices"])
-        correct_letters_list = correct_letters_from_indices(result["correct_indices"])
+        selected_letters = letters_from_indices(result["selected_indices"])
+        correct_letters_list = letters_from_indices(result["correct_indices"])
 
         st.write(f"**Your answer:** {', '.join(selected_letters) if selected_letters else 'No answer selected'}")
         st.write(f"**Correct answer(s):** {', '.join(correct_letters_list)}")
@@ -362,9 +355,14 @@ def main() -> None:
             selected_marker = " ← your choice" if i in result["selected_indices"] else ""
             st.write(f"{marker} {OPTION_KEYS[i]}: {row[ANSWER_COLS[i]]}{selected_marker}")
 
-        if st.button("Next question", type="primary", use_container_width=True):
+        if st.button("Next question", type="primary", use_container_width=True, key=f"next_{current_qid}"):
             updated_progress = load_or_create_progress(df)
-            set_next_question(updated_progress)
+            next_qid = pick_current_question(updated_progress, st.session_state.active_bucket)
+
+            clear_question_widget_state(current_qid)
+            st.session_state.last_result = None
+            st.session_state.mode = "question"
+            st.session_state.current_question_id = next_qid
             st.rerun()
 
 
