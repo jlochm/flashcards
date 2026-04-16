@@ -1,13 +1,16 @@
 import json
+import os
 import random
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
-import html
+
+DATA_DIR = Path(os.environ.get("DATA_DIR", "."))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 CSV_PATH = Path("set1-7.csv")
-PROGRESS_PATH = Path("progress.json")
+PROGRESS_PATH = DATA_DIR / "progress.json"
 BUCKET_LABELS = {
     0: "List 0 · Unseen / Wrong",
     1: "List 1 · Correct once",
