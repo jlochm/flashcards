@@ -62,12 +62,11 @@ def build_default_progress(question_ids: list[str]) -> dict:
     shuffled = question_ids[:]
     random.shuffle(shuffled)
     return {
-        "bucket_0": shuffled,
-        "bucket_1": [],
+        "bucket_0": [],
+        "bucket_1": shuffled,
         "bucket_2": [],
         "bucket_3": [],
     }
-
 
 def save_progress(progress: dict, progress_path: Path) -> None:
     progress_path.write_text(
@@ -93,7 +92,7 @@ def normalize_progress(progress: dict, valid_ids: set[str]) -> dict:
 
     missing = [qid for qid in valid_ids if qid not in seen]
     random.shuffle(missing)
-    cleaned["bucket_0"].extend(missing)
+    cleaned["bucket_1"].extend(missing)
     return cleaned
 
 
