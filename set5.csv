@@ -1,0 +1,59 @@
+﻿Frage,Antwort_A,Antwort_B,Antwort_C,Antwort_D,Antwort_E,A_korrekt,B_korrekt,C_korrekt,D_korrekt,E_korrekt
+An app builder wants to streamline the user experience by reflecting summarized calculations os specific fields on various objects. Which three field types can be used in roll-up summary fields to accomplish this?,Date,Percent,Time,Checkbox,Currency,1,1,0,0,1
+"UC wants to streamline its data capture process by linking fields together. UC wants to do this so that the available values on dependent fields are driven by values selected on controlling fields.
+
+Which three considerations support the  requirements? Choose 3 answers",The data import wizards only allow values to be imported into a dependent picklist if they match the appropriate controlling field.,Custom picklist fields can be either controlling or dependent fields.,Checkbox fields can be controlling fields but not dependent fields.,Standard and custom picklist fields can be dependent fields.,Multi-select picklists can be dependent picklists but NOT controlling fields.,0,1,1,0,1
+"UC allows all employees to submit reviews for leadership using a custom object. These reviews should only be visible to the HR department and the employee who submitted the review.
+
+Which three steps should an app builder take to properly control access to review records? Choose 3 answers",Add a Master-Detail(User) field on the Review object.,Create a criteria-based Sharing Rule for the HR Department.,Remove review read permission from non-HR Department user Profiles.,Disable Grant Access Using Hierarchies.,Set Org Wide Default to Private.,0,1,0,1,1
+"The events manager at CK hosted a launch party and wants to add a CSV file of attendees into a Campaign as Campaign Members so CK can track any future purchases the guests make.
+
+
+
+Which three considerations should be made prior to using the Data Import Wizard for importing Campaign Members? Choose 3 answers","When importing Campaign Members to a Campaign, a status does not need to be selected because the default member status is 'Planned'.","Related Lead, Contact, and Campaign records for the Campaign Members should exist prior to import.",Inserting new Campaign Members prohibits workflow rules and processes for any records that meet automation criteria.,The Data Import Wizard should be accessed from the object home page or from personal settings since they are not System Administrator.,The CSV should be properly formatted and deduplicated prior to insertion via the Data Import Wizard to maintain data cleanliness.,0,1,0,1,1
+"Ck has a sales rep who is stating that their Contact is unavailable for other users to see within Salesforce.
+
+In which three ways can an app builder troubleshoot this issue? Choose 3 answers",Review the Contact record and ensure it is linked to an Account.,Confirm whether Default Organization-Wide Sharing Settings provide access to the Account.,Verify the users with the issue have access to the Contact object.,Create a new Contact and have the users try again.,Create an Account Sharing Rule to give the users access to all records.,1,1,1,0,0
+Which three Salesforce functionalities are ignored when processing field updates in workflow rules and approval processes? Choose 3 answers,Decimal places and character limits,Field-level security,Multiple currencies,Record type picklist value assignments,Validation Rules,0,1,1,0,1
+"CK wants to set up a new opportunity approval process and execute various action items based on the initial submission.
+
+
+
+Which three action types should an app builder use in the approval process? Choose 3 answers",Invocable Process Builder,Email Alert,Task,Outbound Message,Invocable Flow,0,1,1,1,0
+"An app builder wants to use Process Builder to automate some of the work being done by the sales team.
+
+What are three capabilities of Process Builder that can improve productivity? Choose 3 answers",Send an outbound message.,Send an email alert.,Create a child record.,Update a related record.,Delete a related record.,0,1,1,1,0
+"Sales reps at CK forget to submit for approval when CK needs orders reviewed before close won. CK wants to automatically submit Opportunities go into the Secure Commitment Stage to eliminate manual submission.
+
+
+
+Which three features would meet the business requirements? Choose 3 answers",Apex,Flow,Workflow,Chatter action,Process Builder,1,1,0,0,1
+Which three options are available when activating a lightning page from the Lightning App Builder? Choose 3 answers,Assign the page to a combination of apps and profiles.,Assign the page to a combination of apps and permission sets.,Make the page the org default,Make the page the default homepage for specific roles.,Make the page the default homepage for specific apps.,1,0,1,0,1
+"The appraisal team at DreamHouse Realty wants to leverage Salesforce mobile app. 
+
+What are three things an app builder should do to optimiye mobile expereince? Choose 3 answers",Minimize the amount of formula fields and lookup fields to reduce page load time.,Create individual customiyed layouts for different phone operating systems.,Use Global Actions to make it easy to perform vital functionality on mobile.,Put the most important fields in the compact layout so they are easy to find.,Avoid using default field values so that the user is required to fill in all fields on the screen.,1,0,1,1,0
+"Due to the complexity of the UC sandbox release schedule and requirements, it is advised that change sets are used as often as possible to migrate from one environment to another.
+
+Which three common items can an app builder move when using a change set? Choose 3 answers",Web-to-lead,Standard fields,Custom object,Apex class,Custom field,0,0,1,1,1
+"An app builder needs to deploy a new account detail page layout from sandbox to production.
+
+Which three components should an app builder include in the Change Set to ensure it deploys successfully and visually as expected? Choose 3 answers",Custom fields,Lightning App Builder,System administrator profile,Custom actions,Detail page layout,1,0,0,1,1
+"CK has a custom object with a private sharing setting. The business wants to share individual records with specific people or departments on a case-by-case basis.
+
+Which three options does the business user have to manually share individual records?
+
+Choose 3 answers",Roles and Subordinates,Public Groups,Private Groups,Permission Set Groups,Users,1,1,0,0,1
+"UC uses a private sharing model on Accounts. User A and User B both own Accounts of their own and have both been sent a new account record in an email owned by user C to take a look at. User A is able to open and view the record but user B receives an insufficient privileges error. User A and user B have the same role in the role hierarchy as User C.
+
+What are the three reasons user A has access but user B is unable to access the record? Choose 3 answers",User A is on the same account team as user C.,User A and user B have different profiles.,User A is in a public group that has access via a sharing rule.,User A was granted an additional permission set.,User C has manually shared the record with us,1,0,1,0,1
+"An app builder has been tasked with creating separate Opportunity views for three different teams. Each team follows a different sales process and should see different values for the same fields.
+
+
+
+Which three declarative options should they use to accomplish this? Choose 3 answers",Page Layouts,Profiles,Apex Trigger,Path,Schema Builder,1,1,0,1,0
+"The previous administrator of the CK Salesforce Org always utilized text as the field type when creating new custom fields. Ck's current road map requires a project that will clean up this Org during Lightning migration.
+
+
+
+Which three field types should be considered to keep better track of contact information in fields? Choose 3 answers",Date,Phone,Email,Number,Time,1,1,1,0,0
+Which three field types could be included when building a Custom Report Type? Choose 3 answers,Custom fields that have been added to the report types page layout.,Renamed fields from standard objects in their original state.,Lookup fields through four levels of lookup relationships.,Custom metadata field values.,Standard age fields on cases and opportunities.,1,0,1,1,0
