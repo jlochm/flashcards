@@ -160,17 +160,6 @@ def process_answer(progress: dict, current_bucket: int, qid: str, is_correct: bo
     return ("wrong", target_bucket)
 
 
-def initialize_session_state(progress: dict) -> None:
-    if "active_bucket" not in st.session_state:
-        st.session_state.active_bucket = 0
-    if "mode" not in st.session_state:
-        st.session_state.mode = "question"  # question | feedback
-    if "current_question_id" not in st.session_state:
-        st.session_state.current_question_id = pick_current_question(progress, st.session_state.active_bucket)
-    if "last_result" not in st.session_state:
-        st.session_state.last_result = None
-
-
 def pick_current_question(progress: dict, bucket_idx: int) -> str | None:
     queue = progress[bucket_key(bucket_idx)]
     if not queue:
@@ -219,41 +208,83 @@ def render_question_text(row: pd.Series, q_type: str) -> None:
     st.info(q_type)
 
 
-def clear_question_widget_state(qid: str) -> None:
-    for key in [
-        f"radio_{qid}",
-        f"check_{qid}_0",
-        f"check_{qid}_1",
-        f"check_{qid}_2",
-        f"check_{qid}_3",
-    ]:
+def clear_question_widget_state(prefix: str) -> None:
+    keys = [
+        f"{prefix}_radio",
+        f"{prefix}_check_0",
+        f"{prefix}_check_1",
+        f"{prefix}_check_2",
+        f"{prefix}_check_3",
+    ]
+    for key in keys:
         if key in st.session_state:
             del st.session_state[key]
 
 
-def main() -> None:
-    st.set_page_config(page_title="Flashcard Trainer", page_icon="🧠", layout="wide")
-    st.title("🧠 Flashcard Trainer")
+def initialize_session_state(progress: dict) -> None:
+    defaults = {
+        "app_mode": "training",   # training | test_setup | test_run | test_result
+        "active_bucket": 0,
+        "mode": "question",       # question | feedback
+        "current_question_id": pick_current_question(progress, 0),
+        "last_result": None,
+        "test_question_count": 20,
+        "test_questions": [],
+        "test_index": 0,
+        "test_answers": {},
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
 
-    try:
-        df = load_questions(str(CSV_PATH))
-    except Exception as exc:
-        st.error(str(exc))
-        st.info("Place 'set1-7.csv' in the same folder as app.py.")
-        st.stop()
 
-    progress = load_or_create_progress(df)
-    initialize_session_state(progress)
+def start_test(df: pd.DataFrame, n_questions: int) -> None:
+    all_qids = df["question_id"].tolist()
+    if not all_qids:
+        st.error("No questions available for the test.")
+        return
 
-    with st.sidebar:
-        st.header("Progress")
-        for idx in range(4):
-            st.write(f"**{BUCKET_LABELS[idx]}:** {len(progress[bucket_key(idx)])}")
-        st.divider()
-        if st.button("Reset all progress", type="secondary", use_container_width=True):
-            reset_progress(df)
-        st.caption("Progress is stored locally in progress.json.")
+    n_questions = min(n_questions, len(all_qids))
+    sampled = random.sample(all_qids, n_questions)
 
+    st.session_state.test_questions = sampled
+    st.session_state.test_index = 0
+    st.session_state.test_answers = {}
+    st.session_state.app_mode = "test_run"
+    st.rerun()
+
+
+def render_answer_inputs(prefix: str, row: pd.Series, q_type: str, disabled: bool = False) -> list[int]:
+    selected_indices = []
+
+    if q_type == "Single choice":
+        options = [f"{OPTION_KEYS[i]}: {row[ANSWER_COLS[i]]}" for i in range(4)]
+        choice = st.radio(
+            "Choose one answer:",
+            options=range(4),
+            format_func=lambda i: options[i],
+            index=None,
+            key=f"{prefix}_radio",
+            disabled=disabled,
+        )
+        if choice is not None:
+            selected_indices = [choice]
+    else:
+        st.write("Choose one or more answers:")
+        for i in range(4):
+            checked = st.checkbox(
+                f"{OPTION_KEYS[i]}: {row[ANSWER_COLS[i]]}",
+                value=False,
+                key=f"{prefix}_check_{i}",
+                disabled=disabled,
+            )
+            if checked:
+                selected_indices.append(i)
+
+    return selected_indices
+
+
+def render_training_mode(df: pd.DataFrame, progress: dict) -> None:
     render_bucket_buttons(progress)
 
     active_bucket = st.session_state.active_bucket
@@ -283,29 +314,7 @@ def main() -> None:
     render_question_text(row, q_type)
 
     if st.session_state.mode == "question":
-        selected_indices = []
-
-        if q_type == "Single choice":
-            options = [f"{OPTION_KEYS[i]}: {row[ANSWER_COLS[i]]}" for i in range(4)]
-            choice = st.radio(
-                "Choose one answer:",
-                options=range(4),
-                format_func=lambda i: options[i],
-                index=None,
-                key=f"radio_{current_qid}",
-            )
-            if choice is not None:
-                selected_indices = [choice]
-        else:
-            st.write("Choose one or more answers:")
-            for i in range(4):
-                checked = st.checkbox(
-                    f"{OPTION_KEYS[i]}: {row[ANSWER_COLS[i]]}",
-                    value=False,
-                    key=f"check_{current_qid}_{i}",
-                )
-                if checked:
-                    selected_indices.append(i)
+        selected_indices = render_answer_inputs(prefix=f"train_{current_qid}", row=row, q_type=q_type)
 
         if st.button("Submit", type="primary", use_container_width=True, key=f"submit_{current_qid}"):
             selected_set = set(selected_indices)
@@ -359,11 +368,161 @@ def main() -> None:
             updated_progress = load_or_create_progress(df)
             next_qid = pick_current_question(updated_progress, st.session_state.active_bucket)
 
-            clear_question_widget_state(current_qid)
+            clear_question_widget_state(f"train_{current_qid}")
             st.session_state.last_result = None
             st.session_state.mode = "question"
             st.session_state.current_question_id = next_qid
             st.rerun()
+
+
+def render_test_setup(df: pd.DataFrame) -> None:
+    st.markdown("## Test mode")
+    st.write("Choose how many random questions you want in your test.")
+
+    max_questions = len(df)
+    n_questions = st.number_input(
+        "Number of questions",
+        min_value=1,
+        max_value=max_questions,
+        value=min(st.session_state.test_question_count, max_questions),
+        step=1,
+    )
+    st.session_state.test_question_count = int(n_questions)
+
+    if st.button("Start test", type="primary", use_container_width=True):
+        start_test(df, int(n_questions))
+
+
+def render_test_run(df: pd.DataFrame) -> None:
+    test_questions = st.session_state.test_questions
+    idx = st.session_state.test_index
+
+    if idx >= len(test_questions):
+        st.session_state.app_mode = "test_result"
+        st.rerun()
+
+    current_qid = test_questions[idx]
+    row = get_question_row(df, current_qid)
+    q_type = question_type(row)
+    correct_idx = correct_indices(row)
+    correct_set = set(correct_idx)
+
+    st.markdown("## Test mode")
+    st.caption(f"Question {idx + 1} of {len(test_questions)}")
+    render_question_text(row, q_type)
+
+    selected_indices = render_answer_inputs(prefix=f"test_{current_qid}", row=row, q_type=q_type)
+
+    if st.button("Submit answer", type="primary", use_container_width=True, key=f"test_submit_{current_qid}"):
+        selected_set = set(selected_indices)
+        is_correct = selected_set == correct_set
+
+        st.session_state.test_answers[current_qid] = {
+            "selected_indices": selected_indices,
+            "correct_indices": correct_idx,
+            "is_correct": is_correct,
+        }
+
+        clear_question_widget_state(f"test_{current_qid}")
+        st.session_state.test_index += 1
+
+        if st.session_state.test_index >= len(test_questions):
+            st.session_state.app_mode = "test_result"
+        else:
+            st.session_state.app_mode = "test_run"
+
+        st.rerun()
+
+
+def render_test_result(df: pd.DataFrame) -> None:
+    test_questions = st.session_state.test_questions
+    test_answers = st.session_state.test_answers
+
+    total = len(test_questions)
+    correct = sum(1 for qid in test_questions if test_answers.get(qid, {}).get("is_correct", False))
+    wrong = total - correct
+    percentage = (correct / total * 100) if total > 0 else 0.0
+
+    st.markdown("## Test result")
+    st.success("Test finished.")
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Correct", correct)
+    c2.metric("Wrong", wrong)
+    c3.metric("Percentage", f"{percentage:.1f}%")
+
+    with st.expander("Show review"):
+        for i, qid in enumerate(test_questions, start=1):
+            row = get_question_row(df, qid)
+            result = test_answers.get(qid, {})
+            is_correct = result.get("is_correct", False)
+            selected = result.get("selected_indices", [])
+            correct_idx = result.get("correct_indices", [])
+
+            st.markdown(f"### {i}. {row['Frage']}")
+            st.write(f"**Result:** {'✅ Correct' if is_correct else '❌ Wrong'}")
+            st.write(f"**Your answer:** {', '.join(letters_from_indices(selected)) if selected else 'No answer selected'}")
+            st.write(f"**Correct answer(s):** {', '.join(letters_from_indices(correct_idx))}")
+
+    if st.button("Start new test", use_container_width=True):
+        st.session_state.app_mode = "test_setup"
+        st.session_state.test_questions = []
+        st.session_state.test_index = 0
+        st.session_state.test_answers = {}
+        st.rerun()
+
+    if st.button("Back to training", use_container_width=True):
+        st.session_state.app_mode = "training"
+        st.session_state.test_questions = []
+        st.session_state.test_index = 0
+        st.session_state.test_answers = {}
+        st.rerun()
+
+
+def main() -> None:
+    st.set_page_config(page_title="Flashcard Trainer", page_icon="🧠", layout="wide")
+    st.title("🧠 Flashcard Trainer")
+
+    try:
+        df = load_questions(str(CSV_PATH))
+    except Exception as exc:
+        st.error(str(exc))
+        st.info("Place 'set1-7.csv' in the same folder as app.py.")
+        st.stop()
+
+    progress = load_or_create_progress(df)
+    initialize_session_state(progress)
+
+    with st.sidebar:
+        st.header("Mode")
+        if st.button("Training mode", use_container_width=True):
+            st.session_state.app_mode = "training"
+            st.rerun()
+
+        if st.button("Test mode", use_container_width=True):
+            st.session_state.app_mode = "test_setup"
+            st.rerun()
+
+        st.divider()
+
+        st.header("Progress")
+        for idx in range(4):
+            st.write(f"**{BUCKET_LABELS[idx]}:** {len(progress[bucket_key(idx)])}")
+        st.divider()
+
+        if st.button("Reset all progress", type="secondary", use_container_width=True):
+            reset_progress(df)
+
+        st.caption("Progress is stored locally in progress.json.")
+
+    if st.session_state.app_mode == "training":
+        render_training_mode(df, progress)
+    elif st.session_state.app_mode == "test_setup":
+        render_test_setup(df)
+    elif st.session_state.app_mode == "test_run":
+        render_test_run(df)
+    elif st.session_state.app_mode == "test_result":
+        render_test_result(df)
 
 
 if __name__ == "__main__":
