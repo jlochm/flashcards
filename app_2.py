@@ -10,24 +10,42 @@ import streamlit as st
 DATA_DIR = Path(os.environ.get("DATA_DIR", "."))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-DATASETS = {
-    "train4": {
-        "label": "Training · 4 Answers",
-        "csv_path": Path("set1-7.csv"),
-        "progress_path": DATA_DIR / "progress_4.json",
-        "option_keys": ["A", "B", "C", "D"],
-        "answer_cols": ["Antwort_A", "Antwort_B", "Antwort_C", "Antwort_D"],
-        "correct_cols": ["A_korrekt", "B_korrekt", "C_korrekt", "D_korrekt"],
-    },
-    "train5": {
-        "label": "Training · 5 Answers",
-        "csv_path": Path("set5.csv"),
-        "progress_path": DATA_DIR / "progress_5.json",
-        "option_keys": ["A", "B", "C", "D", "E"],
-        "answer_cols": ["Antwort_A", "Antwort_B", "Antwort_C", "Antwort_D", "Antwort_E"],
-        "correct_cols": ["A_korrekt", "B_korrekt", "C_korrekt", "D_korrekt", "E_korrekt"],
-    },
+USERS = {
+    "Karen": "KoalaKuchen42",
+    "Simon": "SneakySloth77",
+    "Roger": "RocketRaccoon13",
+    "Leonardo": "LlamaLasagna99",
 }
+
+
+def safe_user_dir(username: str) -> Path:
+    user_dir = DATA_DIR / "users" / username
+    user_dir.mkdir(parents=True, exist_ok=True)
+    return user_dir
+
+
+def get_datasets_for_user(username: str) -> dict:
+    user_dir = safe_user_dir(username)
+
+    return {
+        "train4": {
+            "label": "Training · 4 Answers",
+            "csv_path": Path("set1-7.csv"),
+            "progress_path": user_dir / "progress_4.json",
+            "option_keys": ["A", "B", "C", "D"],
+            "answer_cols": ["Antwort_A", "Antwort_B", "Antwort_C", "Antwort_D"],
+            "correct_cols": ["A_korrekt", "B_korrekt", "C_korrekt", "D_korrekt"],
+        },
+        "train5": {
+            "label": "Training · 5 Answers",
+            "csv_path": Path("set5.csv"),
+            "progress_path": user_dir / "progress_5.json",
+            "option_keys": ["A", "B", "C", "D", "E"],
+            "answer_cols": ["Antwort_A", "Antwort_B", "Antwort_C", "Antwort_D", "Antwort_E"],
+            "correct_cols": ["A_korrekt", "B_korrekt", "C_korrekt", "D_korrekt", "E_korrekt"],
+        },
+    }
+
 
 BUCKET_LABELS = {
     0: "List 0 · Unseen / Incorrect",
@@ -37,9 +55,37 @@ BUCKET_LABELS = {
 }
 
 
+def render_login() -> bool:
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = False
+
+    if "username" not in st.session_state:
+        st.session_state.username = None
+
+    if st.session_state.logged_in:
+        return True
+
+    st.title("🧠 Flashcard Trainer")
+    st.markdown("## Login")
+
+    username = st.selectbox("User", list(USERS.keys()), index=None)
+    password = st.text_input("Password", type="password")
+
+    if st.button("Log in", type="primary", use_container_width=True):
+        if username in USERS and USERS[username] == password:
+            st.session_state.logged_in = True
+            st.session_state.username = username
+            st.rerun()
+        else:
+            st.error("Incorrect username or password.")
+
+    return False
+
+
 @st.cache_data
 def load_questions(csv_path_str: str, answer_cols: tuple, correct_cols: tuple) -> pd.DataFrame:
     csv_path = Path(csv_path_str)
+
     if not csv_path.exists():
         raise FileNotFoundError(f"CSV file not found: {csv_path.resolve()}")
 
@@ -50,17 +96,20 @@ def load_questions(csv_path_str: str, answer_cols: tuple, correct_cols: tuple) -
 
     required_cols = ["Frage", *list(answer_cols), *list(correct_cols)]
     missing = [c for c in required_cols if c not in df.columns]
+
     if missing:
         raise ValueError(f"Missing required columns in CSV: {missing}")
 
     df = df.copy().reset_index(drop=True)
     df["question_id"] = df.index.astype(str)
+
     return df
 
 
 def build_default_progress(question_ids: list[str]) -> dict:
     shuffled = question_ids[:]
     random.shuffle(shuffled)
+
     return {
         "bucket_0": shuffled,
         "bucket_1": [],
@@ -70,6 +119,7 @@ def build_default_progress(question_ids: list[str]) -> dict:
 
 
 def save_progress(progress: dict, progress_path: Path) -> None:
+    progress_path.parent.mkdir(parents=True, exist_ok=True)
     progress_path.write_text(
         json.dumps(progress, indent=2, ensure_ascii=False),
         encoding="utf-8",
@@ -84,16 +134,20 @@ def normalize_progress(progress: dict, valid_ids: set[str]) -> dict:
         key = f"bucket_{bucket_idx}"
         items = progress.get(key, [])
         cleaned_bucket = []
+
         for qid in items:
             qid = str(qid)
+
             if qid in valid_ids and qid not in seen:
                 cleaned_bucket.append(qid)
                 seen.add(qid)
+
         cleaned[key] = cleaned_bucket
 
     missing = [qid for qid in valid_ids if qid not in seen]
     random.shuffle(missing)
     cleaned["bucket_0"].extend(missing)
+
     return cleaned
 
 
@@ -114,6 +168,7 @@ def load_or_create_progress(df: pd.DataFrame, progress_path: Path) -> dict:
 
     progress = normalize_progress(progress, valid_ids)
     save_progress(progress, progress_path)
+
     return progress
 
 
@@ -123,8 +178,10 @@ def bucket_key(bucket_idx: int) -> str:
 
 def get_question_row(df: pd.DataFrame, qid: str) -> pd.Series:
     row = df.loc[df["question_id"] == str(qid)]
+
     if row.empty:
         raise KeyError(f"Question ID not found: {qid}")
+
     return row.iloc[0]
 
 
@@ -180,6 +237,7 @@ def process_answer(
     target_bucket = 0
     progress[bucket_key(0)] = insert_at_position_five(progress[bucket_key(0)], qid)
     save_progress(progress, progress_path)
+
     return ("wrong", target_bucket)
 
 
@@ -192,8 +250,10 @@ def move_question_to_bucket0(progress: dict, qid: str, progress_path: Path) -> N
 
 def pick_current_question(progress: dict, bucket_idx: int) -> str | None:
     queue = progress[bucket_key(bucket_idx)]
+
     if not queue:
         return None
+
     return queue[0]
 
 
@@ -210,10 +270,11 @@ def render_question_text(row: pd.Series, q_type: str) -> None:
     st.info(q_type)
 
 
-def clear_question_widget_state(qid: str, option_count: int) -> None:
-    keys = [f"radio_{qid}"]
+def clear_question_widget_state(prefix: str, option_count: int) -> None:
+    keys = [f"{prefix}_radio"]
+
     for i in range(option_count):
-        keys.append(f"check_{qid}_{i}")
+        keys.append(f"{prefix}_check_{i}")
 
     for key in keys:
         if key in st.session_state:
@@ -222,7 +283,7 @@ def clear_question_widget_state(qid: str, option_count: int) -> None:
 
 def initialize_session_state() -> None:
     defaults = {
-        "app_mode": "train4",  # train4 | train5 | selftest
+        "app_mode": "train4",
 
         "train4_active_bucket": 0,
         "train4_screen_mode": "question",
@@ -289,8 +350,8 @@ def render_training_bucket_buttons(dataset_key: str, progress: dict) -> None:
             switch_training_bucket(dataset_key, idx, progress)
 
 
-def reset_progress_for_dataset(dataset_key: str, df: pd.DataFrame) -> None:
-    config = DATASETS[dataset_key]
+def reset_progress_for_dataset(dataset_key: str, df: pd.DataFrame, datasets: dict) -> None:
+    config = datasets[dataset_key]
     progress = build_default_progress(df["question_id"].tolist())
     save_progress(progress, config["progress_path"])
 
@@ -304,16 +365,17 @@ def reset_progress_for_dataset(dataset_key: str, df: pd.DataFrame) -> None:
     st.rerun()
 
 
-def load_all_data():
+def load_all_data(datasets: dict):
     dfs = {}
     progresses = {}
 
-    for dataset_key, config in DATASETS.items():
+    for dataset_key, config in datasets.items():
         df = load_questions(
             str(config["csv_path"]),
             tuple(config["answer_cols"]),
             tuple(config["correct_cols"]),
         )
+
         progress = load_or_create_progress(df, config["progress_path"])
 
         dfs[dataset_key] = df
@@ -322,8 +384,21 @@ def load_all_data():
     return dfs, progresses
 
 
-def render_sidebar(dfs: dict, progresses: dict) -> None:
+def logout() -> None:
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+
+    st.rerun()
+
+
+def render_sidebar(dfs: dict, progresses: dict, datasets: dict) -> None:
     st.sidebar.title("Navigation")
+    st.sidebar.write(f"Logged in as: **{st.session_state.username}**")
+
+    if st.sidebar.button("Log out", use_container_width=True):
+        logout()
+
+    st.sidebar.divider()
 
     if st.sidebar.button("Training · 4 Answers", use_container_width=True):
         st.session_state.app_mode = "train4"
@@ -340,23 +415,25 @@ def render_sidebar(dfs: dict, progresses: dict) -> None:
     st.sidebar.divider()
 
     st.sidebar.subheader("4-Answer Progress")
+
     for idx in range(4):
         st.sidebar.write(f"**{BUCKET_LABELS[idx]}:** {len(progresses['train4'][bucket_key(idx)])}")
 
     if st.sidebar.button("Reset 4-answer progress", use_container_width=True):
-        reset_progress_for_dataset("train4", dfs["train4"])
+        reset_progress_for_dataset("train4", dfs["train4"], datasets)
 
     st.sidebar.divider()
 
     st.sidebar.subheader("5-Answer Progress")
+
     for idx in range(4):
         st.sidebar.write(f"**{BUCKET_LABELS[idx]}:** {len(progresses['train5'][bucket_key(idx)])}")
 
     if st.sidebar.button("Reset 5-answer progress", use_container_width=True):
-        reset_progress_for_dataset("train5", dfs["train5"])
+        reset_progress_for_dataset("train5", dfs["train5"], datasets)
 
     st.sidebar.divider()
-    st.sidebar.caption("Progress is stored locally in progress_4.json and progress_5.json.")
+    st.sidebar.caption("Progress is stored separately for each user.")
 
 
 def render_answer_inputs(
@@ -401,8 +478,8 @@ def render_answer_inputs(
     return selected_indices
 
 
-def render_training_mode(dataset_key: str, df: pd.DataFrame, progress: dict) -> None:
-    config = DATASETS[dataset_key]
+def render_training_mode(dataset_key: str, df: pd.DataFrame, progress: dict, datasets: dict) -> None:
+    config = datasets[dataset_key]
     keys = get_training_state_keys(dataset_key)
 
     ensure_current_question_for_dataset(dataset_key, progress)
@@ -499,6 +576,7 @@ def render_training_mode(dataset_key: str, df: pd.DataFrame, progress: dict) -> 
         st.write(f"**Correct answer(s):** {', '.join(correct_letters_list)}")
 
         st.write("**Correct answer text:**")
+
         for text in correct_answers_text(
             row,
             result["correct_indices"],
@@ -508,6 +586,7 @@ def render_training_mode(dataset_key: str, df: pd.DataFrame, progress: dict) -> 
             st.write(f"- {text}")
 
         st.write("**All answer options:**")
+
         for i in range(len(config["option_keys"])):
             marker = "✅" if i in correct_set else "❌"
             selected_marker = " ← your choice" if i in result["selected_indices"] else ""
@@ -580,7 +659,7 @@ def start_test(dfs: dict, n_questions: int) -> None:
     st.rerun()
 
 
-def apply_test_wrong_answers(progresses: dict) -> None:
+def apply_test_wrong_answers(progresses: dict, datasets: dict) -> None:
     if st.session_state.test_progress_applied:
         return
 
@@ -597,7 +676,7 @@ def apply_test_wrong_answers(progresses: dict) -> None:
         if not qids:
             continue
 
-        config = DATASETS[dataset_key]
+        config = datasets[dataset_key]
         progress = progresses[dataset_key]
 
         for qid in qids:
@@ -606,7 +685,7 @@ def apply_test_wrong_answers(progresses: dict) -> None:
     st.session_state.test_progress_applied = True
 
 
-def render_selftest_mode(dfs: dict, progresses: dict) -> None:
+def render_selftest_mode(dfs: dict, progresses: dict, datasets: dict) -> None:
     st.markdown("## Self-test")
     st.write("Choose the number of questions. Questions are randomly selected from both datasets.")
 
@@ -631,7 +710,7 @@ def render_selftest_mode(dfs: dict, progresses: dict) -> None:
         correct = sum(1 for x in st.session_state.test_answers.values() if x["is_correct"])
         percent = (correct / total * 100) if total else 0.0
 
-        apply_test_wrong_answers(progresses)
+        apply_test_wrong_answers(progresses, datasets)
 
         st.success("Test completed.")
         st.metric("Result", f"{percent:.1f}%")
@@ -655,7 +734,7 @@ def render_selftest_mode(dfs: dict, progresses: dict) -> None:
     dataset_key = current_item["dataset_key"]
     qid = current_item["question_id"]
 
-    config = DATASETS[dataset_key]
+    config = datasets[dataset_key]
     df = dfs[dataset_key]
 
     row = get_question_row(df, qid)
@@ -716,6 +795,7 @@ def render_selftest_mode(dfs: dict, progresses: dict) -> None:
         st.write(f"**Correct answer(s):** {', '.join(correct_letters_list)}")
 
         st.write("**Correct answer text:**")
+
         for text in correct_answers_text(
             row,
             result["correct_indices"],
@@ -725,6 +805,7 @@ def render_selftest_mode(dfs: dict, progresses: dict) -> None:
             st.write(f"- {text}")
 
         st.write("**All answer options:**")
+
         for i in range(len(config["option_keys"])):
             marker = "✅" if i in correct_set else "❌"
             selected_marker = " ← your choice" if i in result["selected_indices"] else ""
@@ -756,25 +837,31 @@ def main() -> None:
         layout="wide",
     )
 
-    st.title("🧠 Flashcard Trainer")
+    if not render_login():
+        return
 
     initialize_session_state()
 
+    datasets = get_datasets_for_user(st.session_state.username)
+
+    st.title("🧠 Flashcard Trainer")
+    st.caption(f"Logged in as: {st.session_state.username}")
+
     try:
-        dfs, progresses = load_all_data()
+        dfs, progresses = load_all_data(datasets)
     except Exception as exc:
         st.error(str(exc))
         st.info("Please make sure set1-7.csv and set5.csv are in the same folder as app.py.")
         st.stop()
 
-    render_sidebar(dfs, progresses)
+    render_sidebar(dfs, progresses, datasets)
 
     if st.session_state.app_mode == "train4":
-        render_training_mode("train4", dfs["train4"], progresses["train4"])
+        render_training_mode("train4", dfs["train4"], progresses["train4"], datasets)
     elif st.session_state.app_mode == "train5":
-        render_training_mode("train5", dfs["train5"], progresses["train5"])
+        render_training_mode("train5", dfs["train5"], progresses["train5"], datasets)
     else:
-        render_selftest_mode(dfs, progresses)
+        render_selftest_mode(dfs, progresses, datasets)
 
 
 if __name__ == "__main__":
