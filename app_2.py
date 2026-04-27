@@ -11,10 +11,10 @@ DATA_DIR = Path(os.environ.get("DATA_DIR", "."))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 USERS = {
-    "Karen": "KoalaKuchen42",
-    "Simon": "SneakySloth77",
-    "Roger": "RocketRaccoon13",
-    "Leonardo": "LlamaLasagna99",
+    "Karen": "Koala",
+    "Simon": "Seal",
+    "Roger": "Raccoon",
+    "Leonardo": "Llama",
 }
 
 
