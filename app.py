@@ -14,7 +14,7 @@ CSV_PATH = Path("set1-7.csv")
 PROGRESS_PATH = DATA_DIR / "progress.json"
 
 BUCKET_LABELS = {
-    0: "List 0 · Unseen / Wrong",
+    0: "List 0 · Unseen / Incorrect",
     1: "List 1 · Correct once",
     2: "List 2 · Correct twice",
     3: "List 3 · Correct three times",
@@ -223,9 +223,9 @@ def clear_question_widget_state(prefix: str) -> None:
 
 def initialize_session_state(progress: dict) -> None:
     defaults = {
-        "app_mode": "training",   # training | test_setup | test_run | test_result
+        "app_mode": "training",
         "active_bucket": 0,
-        "mode": "question",       # question | feedback
+        "mode": "question",
         "current_question_id": pick_current_question(progress, 0),
         "last_result": None,
         "test_question_count": 20,
@@ -345,7 +345,7 @@ def render_training_mode(df: pd.DataFrame, progress: dict) -> None:
             st.success(f"Correct. The question was moved to {BUCKET_LABELS[result['moved_to_bucket']]}.")
         else:
             st.error(
-                f"Incorrect. The question was moved to {BUCKET_LABELS[result['moved_to_bucket']]} and will reappear soon."
+                f"Incorrect. The question was moved to {BUCKET_LABELS[result['moved_to_bucket']]} and will appear again soon."
             )
 
         selected_letters = letters_from_indices(result["selected_indices"])
@@ -448,7 +448,7 @@ def render_test_result(df: pd.DataFrame) -> None:
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Correct", correct)
-    c2.metric("Wrong", wrong)
+    c2.metric("Incorrect", wrong)
     c3.metric("Percentage", f"{percentage:.1f}%")
 
     with st.expander("Show review"):
@@ -460,7 +460,7 @@ def render_test_result(df: pd.DataFrame) -> None:
             correct_idx = result.get("correct_indices", [])
 
             st.markdown(f"### {i}. {row['Frage']}")
-            st.write(f"**Result:** {'✅ Correct' if is_correct else '❌ Wrong'}")
+            st.write(f"**Result:** {'✅ Correct' if is_correct else '❌ Incorrect'}")
             st.write(f"**Your answer:** {', '.join(letters_from_indices(selected)) if selected else 'No answer selected'}")
             st.write(f"**Correct answer(s):** {', '.join(letters_from_indices(correct_idx))}")
 
